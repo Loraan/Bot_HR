@@ -1,0 +1,26 @@
+# Виртуальное окружение
+.venv/
+venv/
+env/
+
+# Кэш Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Настройки IDE
+.idea/
+.vscode/
+
+# Тестовые/временные файлы
+test_progress_tmp.py
+real_check.py
+
+# Файлы с данными (данные пользователей, маршрутов и прогресса)
+Tables/
+
+# Логи и служебные файлы
+*.log
+.DS_Store

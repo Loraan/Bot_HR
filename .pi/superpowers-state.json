@@ -1,0 +1,62 @@
+{
+  "workflow": {
+    "phases": {
+      "brainstorm": "pending",
+      "plan": "pending",
+      "execute": "pending",
+      "verify": "pending",
+      "review": "pending",
+      "finish": "pending"
+    },
+    "currentPhase": null,
+    "artifacts": {
+      "brainstorm": null,
+      "plan": null,
+      "execute": null,
+      "verify": null,
+      "review": null,
+      "finish": null
+    },
+    "prompted": {
+      "brainstorm": false,
+      "plan": false,
+      "execute": false,
+      "verify": false,
+      "review": false,
+      "finish": false
+    }
+  },
+  "tdd": {
+    "phase": "idle",
+    "testFiles": [],
+    "sourceFiles": [
+      "C:/Users/golga/Bot_HR/registration_bot.py",
+      "C:/Users/golga/Bot_HR/config.py",
+      "C:/Users/golga/Bot_HR/app.py",
+      "C:/Users/golga/Bot_HR/storage/__init__.py",
+      "C:/Users/golga/Bot_HR/storage/users.py",
+      "C:/Users/golga/Bot_HR/storage/routes.py",
+      "C:/Users/golga/Bot_HR/storage/progress.py",
+      "C:/Users/golga/Bot_HR/helpers/__init__.py",
+      "C:/Users/golga/Bot_HR/helpers/auth.py",
+      "C:/Users/golga/Bot_HR/helpers/keyboards.py",
+      "C:/Users/golga/Bot_HR/handlers/__init__.py",
+      "C:/Users/golga/Bot_HR/handlers/registration.py",
+      "C:/Users/golga/Bot_HR/helpers/scoring.py",
+      "C:/Users/golga/Bot_HR/handlers/menu.py",
+      "C:/Users/golga/Bot_HR/handlers/admin.py",
+      "C:/Users/golga/Bot_HR/handlers/routes.py",
+      "C:/Users/golga/Bot_HR/main.py"
+    ],
+    "redVerificationPending": false
+  },
+  "debug": {
+    "active": false,
+    "investigated": true,
+    "fixAttempts": 0
+  },
+  "verification": {
+    "verified": false,
+    "verificationWaived": false
+  }
+}
