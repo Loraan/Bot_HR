@@ -4,7 +4,7 @@ from telebot import types
 
 from app import bot, state
 from helpers.auth import is_admin
-from helpers.keyboards import main_menu_keyboard
+from helpers.keyboards import admin_menu_keyboard
 from storage import routes as storage_routes
 
 
@@ -54,5 +54,5 @@ def get_route_description(message):
     bot.send_message(
         message.chat.id,
         f"✅ Маршрут \"{route_name}\" добавлен!",
-        reply_markup=main_menu_keyboard(message.from_user.id),
+        reply_markup=admin_menu_keyboard(),
     )

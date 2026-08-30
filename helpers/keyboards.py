@@ -8,13 +8,32 @@ from helpers.auth import is_admin
 
 def main_menu_keyboard(user_id: int) -> types.ReplyKeyboardMarkup:
     """Клавиатура главного меню.
-    Кнопка "Добавить маршрут" показывается только администраторам."""
+    Кнопка "Обратная связь" показывается только обычным пользователям,
+    а для админов — кнопка "Админка"."""
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.row(config.BTN_RATING)
     keyboard.row(config.BTN_ROUTES)
-    keyboard.row(config.BTN_FEEDBACK)
     if is_admin(user_id):
-        keyboard.row(config.BTN_ADD_ROUTE)
+        keyboard.row(config.BTN_ADMIN)
+    else:
+        keyboard.row(config.BTN_FEEDBACK)
+    return keyboard
+
+
+def admin_menu_keyboard() -> types.ReplyKeyboardMarkup:
+    """Клавиатура админ-меню с кнопками управления."""
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.row(config.BTN_ADD_ROUTE)
+    keyboard.row(config.BTN_VIEW_FEEDBACK)
+    keyboard.row(config.BTN_VIEW_PHOTOS)
+    keyboard.row(config.BTN_BACK)
+    return keyboard
+
+
+def cancel_keyboard() -> types.ReplyKeyboardMarkup:
+    """Клавиатура с кнопкой отмены."""
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.row(config.BTN_CANCEL)
     return keyboard
 
 

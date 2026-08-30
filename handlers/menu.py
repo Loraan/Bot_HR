@@ -1,7 +1,10 @@
 """Хендлеры главного меню: рейтинговая таблица, маршруты, обратная связь."""
 
+import config
 from app import bot, state
 from helpers import keyboards, scoring
+from helpers.auth import is_admin
+from storage import feedback as storage_feedback
 from storage import routes as storage_routes
 from storage import users as storage_users
 
@@ -79,6 +82,98 @@ def routes(message):
 
 @bot.message_handler(func=lambda m: m.text == "Обратная связь")
 def feedback(message):
-    """Обратная связь."""
-    # TODO: добавить логику — приём и сохранение обратной связи от участника
-    bot.send_message(message.chat.id, "💬 Здесь можно оставить обратную связь.")
+    """Приём обратной связи от пользователя (не для админов)."""
+    user_id = message.from_user.id
+
+    # Админам не нужно оставлять обратную связь
+    if is_admin(user_id):
+        bot.send_message(message.chat.id, "Вы администратор, обратная связь не требуется.")
+        return
+
+    # Пользователь должен быть зарегистрирован, чтобы назвать его по имени
+    users = storage_users.load_users()
+    if user_id not in users:
+        bot.send_message(message.chat.id, "⚠️ Сначала зарегистрируйтесь через /start.")
+        return
+
+    bot.send_message(
+        message.chat.id,
+        "Поделитесь своими впечатлениями о работе бота или активностях цельным сообщением:",
+        reply_markup=keyboards.cancel_keyboard(),
+    )
+    bot.register_next_step_handler(message, get_feedback)
+
+
+@bot.message_handler(func=lambda m: m.text == "Админка")
+def admin_menu(message):
+    """Показывает меню админа."""
+    if not is_admin(message.from_user.id):
+        bot.send_message(message.chat.id, "⛔ У вас недостаточно прав для этой операции.")
+        return
+
+    bot.send_message(
+        message.chat.id,
+        "🛠 Админка:",
+        reply_markup=keyboards.admin_menu_keyboard(),
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "⬅️ Назад")
+def back_to_main_menu(message):
+    """Возвращает в главное меню."""
+    show_main_menu(message)
+
+
+def get_feedback(message):
+    """Получает текст обратной связи и сохраняет его в файл."""
+    # Пользователь отменил отправку обратной связи
+    if message.text == config.BTN_CANCEL:
+        bot.send_message(
+            message.chat.id,
+            "🚫 Обратная связь отменена.",
+            reply_markup=keyboards.main_menu_keyboard(message.from_user.id),
+        )
+        return
+
+    if message.text is None or not message.text.strip():
+        bot.send_message(
+            message.chat.id,
+            "Пожалуйста, отправьте обратную связь текстовым сообщением:",
+            reply_markup=keyboards.cancel_keyboard(),
+        )
+        bot.register_next_step_handler(message, get_feedback)
+        return
+
+    user_id = message.from_user.id
+    users = storage_users.load_users()
+    first_name, last_name = users.get(user_id, ("", ""))
+
+    feedback_text = message.text.strip()
+    storage_feedback.save_feedback(user_id, first_name, last_name, feedback_text)
+
+    bot.send_message(
+        message.chat.id,
+        "✅ Спасибо! Ваша обратная связь сохранена.",
+        reply_markup=keyboards.main_menu_keyboard(user_id),
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "Посмотреть обратную связь")
+def view_feedback(message):
+    """Просмотр всей обратной связи (только для админов)."""
+    if not is_admin(message.from_user.id):
+        bot.send_message(message.chat.id, "⛔ У вас недостаточно прав для этой операции.")
+        return
+
+    feedback_list = storage_feedback.load_feedback()
+
+    if not feedback_list:
+        bot.send_message(message.chat.id, "💬 Обратной связи пока нет.")
+        return
+
+    for _user_id, first_name, last_name, feedback_text in feedback_list:
+        author = f"{first_name} {last_name}".strip() or "Неизвестный"
+        bot.send_message(
+            message.chat.id,
+            f"💬 От: {author}\n\n{feedback_text}",
+        )

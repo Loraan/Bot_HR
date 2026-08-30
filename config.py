@@ -1,16 +1,10 @@
 """Конфигурация и константы бота."""
 
-# Токен от @BotFather
-TOKEN = "8768596280:AAH9p4A4Wv1gISfYgy8jewPPaWNsbrc8mxQ"
+# Файл базы данных SQLite (заменяет txt-хранилища)
+DATABASE_FILE = "Tables/bot.db"
 
-# Файл, куда сохраняются пользователи
-USER_TABLE_FILE = "Tables/UserTable.txt"
-
-# Файл, куда сохраняются маршруты
-ROUTES_FILE = "Tables/Routes.txt"
-
-# Файл, куда сохраняется прогресс выполнения маршрутов
-PROGRESS_FILE = "Tables/Progress.txt"
+# Папка для фотографий, подтверждающих выполнение заданий
+PHOTOS_DIR = "Tables/photos"
 
 # Список id пользователей с правами администратора
 ADMIN_IDS = {565631717, 690003923}
@@ -28,4 +22,9 @@ MAIN_MENU_TEXT = "Выберите действие:"
 BTN_RATING = "Рейтинговая Таблица"
 BTN_ROUTES = "Маршруты"
 BTN_FEEDBACK = "Обратная связь"
+BTN_ADMIN = "Админка"
 BTN_ADD_ROUTE = "➕ Добавить маршрут"
+BTN_VIEW_FEEDBACK = "Посмотреть обратную связь"
+BTN_VIEW_PHOTOS = "Посмотреть фото"
+BTN_BACK = "⬅️ Назад"
+BTN_CANCEL = "Отмена"

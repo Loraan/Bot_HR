@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  bot:
+    build: .
+    container_name: hr-bot
+    restart: unless-stopped
+    environment:
+      # Токен бота (задаётся в .env, не хранится в репозитории)
+      - BOT_TOKEN=${BOT_TOKEN}
+    volumes:
+      # Сохраняем базу данных и фото вне контейнера, чтобы данные не терялись
+      - bot_data:/app/Tables
+
+volumes:
+  bot_data:
