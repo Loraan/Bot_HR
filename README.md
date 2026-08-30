@@ -8,7 +8,7 @@ Telegram-бот на `pyTelegramBotAPI`, который регистрирует
 
 ```bash
 # из корня проекта (Bot_HR)
-python -m venv .venv
+python3 -m venv .venv
 
 # Windows
 .venv\Scripts\activate
@@ -22,12 +22,25 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Настройка токена
+### 3. Токен бота
 
-Открой файл `config.py` и вставь свой токен от [@BotFather](https://t.me/BotFather) в переменную `TOKEN`:
+Токен от [@BotFather](https://t.me/BotFather) **не хранится в проекте** — он передаётся при запуске одним из двух способов:
 
-```python
-TOKEN = "ВАШ_ТОКЕН_БОТА"
+**Способ 1 — переменная окружения (рекомендуется):**
+```bash
+export BOT_TOKEN="ВАШ_ТОКЕН_БОТА"   # Linux / macOS
+# или
+set BOT_TOKEN=ВАШ_ТОКЕН_БОТА         # Windows (cmd)
+$env:BOT_TOKEN="ВАШ_ТОКЕН_БОТА"      # Windows (PowerShell)
+
+python main.py
+```
+
+**Способ 2 — ввод вручную:**
+Просто запусти бота без переменной окружения — при старте он спросит токен:
+```bash
+python main.py
+# Введите токен бота от @BotFather: <вставить токен>
 ```
 
 ### 4. Запуск бота
@@ -40,20 +53,90 @@ python main.py
 
 ---
 
+## 🐳 Запуск в Docker (развёртывание на сервере)
+
+Проект можно развернуть в Docker-контейнере. Образ собирает Python-окружение, а данные (SQLite и фото) хранятся в отдельном volume, поэтому переживают перезапуск контейнера.
+
+### 1. Установка Docker
+
+- [Docker Engine](https://docs.docker.com/engine/install/) — для Linux-сервера
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) — для macOS/Windows
+
+### 2. Настройка токена
+
+Скопируйте пример файла с переменными и вставьте свой токен:
+```bash
+cp .env.example .env
+# откройте .env и замените BOT_TOKEN=ваш_токен_бота на реальный токен
+```
+
+### 3. Сборка и запуск
+
+Через Docker Compose (рекомендуется):
+```bash
+docker compose up -d --build
+```
+
+Или через чистый Docker:
+```bash
+docker build -t hr-bot .
+docker run -d \
+  --name hr-bot \
+  --restart unless-stopped \
+  -e BOT_TOKEN="ваш_токен_бота" \
+  -v hr-bot-data:/app/Tables \
+  hr-bot
+```
+
+> Для передачи токена можно также использовать переменную окружения оболочки вместо `.env`:
+> ```bash
+> export BOT_TOKEN="ваш_токен_бота"
+> docker compose up -d --build
+> ```
+
+### 4. Просмотр логов и остановка
+
+```bash
+# логи бота
+docker compose logs -f
+
+# остановить контейнер
+docker compose down
+
+# пересобрать после изменений кода
+docker compose up -d --build
+```
+
+### 5. Данные в volume
+
+База данных `Tables/bot.db` и фотографии `Tables/photos/` лежат в Docker volume `bot_data` (или `hr-bot-data` при запуске без compose) и сохраняются между перезапусками. Чтобы посмотреть их:
+```bash
+# перечислить volumes
+docker volume ls
+
+# попасть внутрь работающего контейнера
+docker exec -it hr-bot sh
+```
+
+---
+
 ## 📁 Структура проекта
 
 ```
 Bot_HR/
 ├── main.py                  # Точка входа: запуск бота (polling)
-├── app.py                   # Создание экземпляра бота + глобальные состояния (AppState)
-├── config.py                # Все константы: токен, пути к файлам, админ-id, задания, баллы
+├── app.py                   # Создание экземпляра бота (токен из env/ввода) + состояния (AppState)
+├── config.py                # Все константы: пути к файлам, админ-id, задания, баллы
 ├── requirements.txt         # Зависимости проекта
 ├── .gitignore               # Исключения для git
 │
-├── storage/                 # Работа с файлами-хранилищами (нет логики бота)
-│   ├── users.py             #   UserTable.txt: user_exists, save_user, load_users
-│   ├── routes.py            #   Routes.txt: load_routes, save_route
-│   └── progress.py          #   Progress.txt: load_progress, save_progress
+├── storage/                 # Работа с хранилищем данных (SQLite, нет логики бота)
+│   ├── db.py                #   Подключение к БД и создание таблиц (init_db)
+│   ├── users.py             #   Таблица users: user_exists, save_user, load_users
+│   ├── routes.py            #   Таблица routes: load_routes, save_route
+│   ├── progress.py          #   Таблица progress: load_progress, save_progress
+│   ├── feedback.py          #   Таблица feedback: save_feedback, load_feedback
+│   └── photos.py            #   Сохранение/получение фото подтверждения и запись пути в БД
 │
 ├── helpers/                 # Вспомогательные функции
 │   ├── auth.py              #   is_admin, get_role
@@ -64,12 +147,17 @@ Bot_HR/
 │   ├── registration.py      #   /start и /users
 │   ├── menu.py              #   Рейтинговая таблица, Маршруты, Обратная связь
 │   ├── routes.py            #   Callback'и маршрутов и выполнения заданий
-│   └── admin.py             #   Добавление маршрута (только админ)
+│   ├── admin.py             #   Добавление маршрута (только админ)
+│   └── photos.py            #   Просмотр фото подтверждения (только админ)
+│
+├── Dockerfile               # Образ контейнера
+├── docker-compose.yml       # Оркестрация контейнера (compose)
+├── .dockerignore            # Что не копировать в образ
+├── .env.example             # Пример переменных окружения (токен)
 │
 └── Tables/                  # Директория с данными (создаётся автоматически)
-    ├── UserTable.txt        #   id | Имя | Фамилия
-    ├── Routes.txt           #   Название маршрута | Описание
-    └── Progress.txt         #   id | Название:Действия;...
+    ├── bot.db               #   База данных SQLite (users, routes, progress, feedback, photos)
+    └── photos/              #   Фотографии подтверждения выполнения заданий
 ```
 
 ---
@@ -78,10 +166,11 @@ Bot_HR/
 
 | Папка | Назначение |
 |-------|-----------|
-| `main.py` | **Метод main** — точка входа, запускает `load_progress()` и `bot.infinity_polling()` |
+| `main.py` | **Метод main** — точка входа: `init_db()`, `load_progress()` и `bot.infinity_polling()` |
 | `app.py` | Единая точка для `bot` и `state` (общие состояния: прогресс, данные регистрации, ожидание фото). Решает проблему циклических импортов |
 | `config.py` | **Конфигурация** — вынесены все «магические» значения |
-| `storage/` | **Экстеншены/хранение** — чистая работа с файлами, без `telebot` |
+| `storage/db.py` | **База данных** — подключение к SQLite и создание таблиц, настройка против блокировок |
+| `storage/` | **Хранение** — чистая работа с БД, без `telebot` |
 | `helpers/` | **Хелперы** — переиспользуемые функции без состояния бота |
 | `handlers/` | **Хендлеры** — декораторы `@bot.message_handler` и `@bot.callback_query_handler` |
 
@@ -90,7 +179,7 @@ Bot_HR/
 ## 👤 Права пользователей
 
 - **User** — регистрация, просмотр маршрутов, выполнение заданий, обратная связь.
-- **Admin** — всё, что и User, плюс кнопка **«➕ Добавить маршрут»**.
+- **Admin** — всё, что и User (кроме «Обратной связи»), плюс кнопка **«Админка»**, внутри которой находятся **«➕ Добавить маршрут»**, **«Посмотреть обратную связь»** и **«Посмотреть фото»**.
 
 Список админов задаётся в `config.py` → `ADMIN_IDS = {565631717, 690003923}`.
 
@@ -116,4 +205,95 @@ Bot_HR/
 
 - Выполнение задания подтверждается загрузкой **1 фотографии**.
 - Маршрут считается **выполненным**, только когда закрыты **все 3 задания**.
-- Прогресс (и перечень выполненных действий) сохраняется в `Tables/Progress.txt` и переживает перезапуск бота.
+- Прогресс (и перечень выполненных действий) сохраняется в SQLite (`Tables/bot.db`) и переживает перезапуск бота.
+
+---
+
+## 🗄️ Хранение данных (SQLite)
+
+Вся информация хранится в базе данных SQLite (`Tables/bot.db`). Таблицы создаются автоматически при запуске (`init_db()`):
+
+| Таблица   | Бывший txt-файл | Колонки |
+|-----------|-----------------|---------|
+| `users`   | `UserTable.txt` | `user_id`, `first_name`, `last_name` |
+| `routes`  | `Routes.txt`    | `id`, `name`, `description` |
+| `progress`| `Progress.txt`  | `user_id`, `route_index`, `done_tasks`, `is_completed` |
+| `feedback`| `FeedBack.txt`  | `id`, `user_id`, `first_name`, `last_name`, `feedback` |
+| `photos`  | — (новая)       | `id`, `user_id`, `route_index`, `task_index`, `file_path` |
+
+Просмотр фото подтверждения доступен админу через **«Админка» → «Посмотреть фото»**: сначала выбирается пользователь (только те, у кого есть выполненные активности), затем маршрут (только с выполненными активностями), затем активность (только выполненные) — после чего показывается фотография и подпись отдельным сообщением.
+
+База настроена на безопасную работу с несколькими пользователями:
+- `check_same_thread=False` — соединение можно использовать из разных потоков;
+- `journal_mode=WAL` — параллельные чтения во время записи;
+- `busy_timeout=5000` — ожидание до 5 секунд, если база занята, вместо мгновенной ошибки блокировки.
+
+### Файлы `bot.db-wal` и `bot.db-shm`
+
+Рядом с `bot.db` появляются служебные файлы `bot.db-wal` и `bot.db-shm` — это нормально, так работает режим WAL:
+
+- **`bot.db-wal`** (Write-Ahead Log) — журнал, куда SQLite сначала записывает изменения, прежде чем переносить их в основной `bot.db`. Благодаря этому чтение не блокируется во время записи.
+- **`bot.db-shm`** (Shared Memory) — служебный индекс для координации WAL между несколькими соединениями/потоками.
+
+Правила работы с ними:
+- Не удаляйте эти файлы **во время работы бота** — это приведёт к ошибкам или потере данных.
+- При остановленном боте их удаление безопасно: SQLite пересоздаст их автоматически.
+- В `git` они не попадают, т.к. вся папка `Tables/` в `.gitignore`.
+
+### Резервное копирование БД
+
+Простое копирование файла `bot.db` при работающем боте **может не захватить** последние изменения, оставшиеся в `-wal`. Для корректного бэкапа:
+
+- **Вариант 1** — остановить бот, затем скопировать `Tables/bot.db`.
+- **Вариант 2** — не останавливая бот, сделать консистентный дамп (из консоли):
+  ```bash
+  sqlite3 Tables/bot.db ".backup backup_bot.db"
+  ```
+  либо через Python:
+  ```python
+  import sqlite3, config
+  src = sqlite3.connect(config.DATABASE_FILE)
+  dst = sqlite3.connect("backup_bot.db")
+  src.backup(dst)
+  dst.close()
+  src.close()
+  ```
+
+### Простые SQL-запросы для проверки данных
+
+Посмотреть содержимое таблиц можно через консоль SQLite:
+```bash
+sqlite3 Tables/bot.db
+```
+или одной командой:
+```bash
+sqlite3 Tables/bot.db "SELECT * FROM users;"
+```
+
+Полезные запросы:
+```sql
+-- Список всех таблиц
+SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';
+
+-- Все пользователи
+SELECT * FROM users;
+
+-- Все маршруты
+SELECT * FROM routes;
+
+-- Прогресс выполнения
+SELECT * FROM progress;
+
+-- Обратная связь
+SELECT * FROM feedback;
+
+-- Фотографии подтверждения
+SELECT * FROM photos;
+
+-- Очистить таблицу (осторожно, безвозвратно)
+DELETE FROM users;      -- или любую другую таблицу
+```
+
+## 📸 Фотографии подтверждения
+
+При выполнении пункта маршрута пользователь отправляет фотографию. Она скачивается ботом и сохраняется в папку `Tables/photos/`, а в таблицу `photos` записывается путь к файлу. Имя файла: `user_{user_id}_route_{route_index}_task_{task_index}_{timestamp}.jpg`.

@@ -1,11 +1,22 @@
 """Единая точка создания бота и хранения общих состояний приложения."""
 
+import os
+import sys
+
 import telebot
 
-import config
+# Токен бота берётся из переменной окружения BOT_TOKEN.
+# Если переменная не задана — запрашиваем его при запуске вручную.
+# Это позволяет не хранить токен в самом проекте.
+TOKEN = os.environ.get("BOT_TOKEN")
+if not TOKEN:
+    TOKEN = input("Введите токен бота от @BotFather: ").strip()
+    if not TOKEN:
+        print("Ошибка: токен не может быть пустым. Задайте переменную окружения BOT_TOKEN.")
+        sys.exit(1)
 
 # Единственный экземпляр бота, используемый во всех хендлерах
-bot = telebot.TeleBot(config.TOKEN)
+bot = telebot.TeleBot(TOKEN)
 
 
 class AppState:

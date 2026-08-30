@@ -1,29 +1,29 @@
-"""Работа с маршрутами (Routes.txt).
+"""Работа с маршрутами (SQLite, таблица routes).
 
-Формат строки: Название | Описание
+Бывший Routes.txt: Название | Описание
 """
 
-import config
+from storage import db
 
 
 def load_routes() -> list:
-    """Загружает все маршруты из файла. Возвращает список пар (название, описание)."""
+    """Загружает все маршруты. Возвращает список пар (название, описание)."""
+    conn = db.get_connection()
     try:
-        with open(config.ROUTES_FILE, "r", encoding="utf-8") as f:
-            lines = [line.strip() for line in f if line.strip()]
-    except FileNotFoundError:
-        return []
-
-    routes_list = []
-    for line in lines:
-        parts = line.split(" | ", 1)
-        name = parts[0].strip()
-        description = parts[1].strip() if len(parts) > 1 else "Без описания"
-        routes_list.append((name, description))
-    return routes_list
+        rows = conn.execute("SELECT name, description FROM routes ORDER BY id").fetchall()
+        return [(row["name"], row["description"]) for row in rows]
+    finally:
+        conn.close()
 
 
 def save_route(name: str, description: str) -> None:
-    """Добавляет новый маршрут в файл в формате: Название | Описание."""
-    with open(config.ROUTES_FILE, "a", encoding="utf-8") as f:
-        f.write(f"{name} | {description}\n")
+    """Добавляет новый маршрут в таблицу routes."""
+    conn = db.get_connection()
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO routes (name, description) VALUES (?, ?)",
+                (name, description),
+            )
+    finally:
+        conn.close()

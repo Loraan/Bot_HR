@@ -9,3 +9,4 @@ from handlers import menu  # noqa: F401
 from handlers import registration  # noqa: F401
 from handlers import routes  # noqa: F401
 from handlers import admin  # noqa: F401
+from handlers import photos  # noqa: F401

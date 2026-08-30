@@ -1,60 +1,53 @@
-"""Работа с таблицей пользователей (UserTable.txt).
+"""Работа с таблицей пользователей (SQLite, таблица users).
 
-Формат строки: id | Имя | Фамилия
+Бывший UserTable.txt: id | Имя | Фамилия
 """
 
 import config
+from storage import db
 
 
 def user_exists(user_id: int) -> bool:
-    """Проверяет, есть ли уже такой user_id в файле UserTable."""
+    """Проверяет, есть ли уже такой user_id в таблице users."""
+    conn = db.get_connection()
     try:
-        with open(config.USER_TABLE_FILE, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                parts = line.split(" | ")
-                # Формат строки: id | Имя | Фамилия
-                if parts and parts[0] == str(user_id):
-                    return True
-    except FileNotFoundError:
-        # Файла ещё нет — значит пользователей точно нет
-        return False
-    return False
+        row = conn.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        return row is not None
+    finally:
+        conn.close()
 
 
 def save_user(user_id: int, first_name: str, last_name: str) -> None:
-    """Записывает нового пользователя в файл UserTable."""
-    with open(config.USER_TABLE_FILE, "a", encoding="utf-8") as f:
-        f.write(f"{user_id} | {first_name} | {last_name}\n")
+    """Записывает нового пользователя в таблицу users."""
+    conn = db.get_connection()
+    try:
+        with conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO users (user_id, first_name, last_name) VALUES (?, ?, ?)",
+                (user_id, first_name, last_name),
+            )
+    finally:
+        conn.close()
 
 
 def load_users() -> dict:
     """Загружает всех пользователей. Возвращает {user_id: (имя, фамилия)}."""
-    users = {}
+    conn = db.get_connection()
     try:
-        with open(config.USER_TABLE_FILE, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                parts = line.split(" | ")
-                if len(parts) == 3:
-                    try:
-                        user_id = int(parts[0].strip())
-                    except ValueError:
-                        continue
-                    users[user_id] = (parts[1].strip(), parts[2].strip())
-    except FileNotFoundError:
-        pass
-    return users
+        rows = conn.execute("SELECT user_id, first_name, last_name FROM users").fetchall()
+        return {row["user_id"]: (row["first_name"], row["last_name"]) for row in rows}
+    finally:
+        conn.close()
 
 
 def load_user_lines() -> list:
-    """Возвращает список непустых строк файла UserTable."""
+    """Возвращает список строк вида 'id | Имя | Фамилия' (для /users)."""
+    conn = db.get_connection()
     try:
-        with open(config.USER_TABLE_FILE, "r", encoding="utf-8") as f:
-            return [line.strip() for line in f if line.strip()]
-    except FileNotFoundError:
-        return []
+        rows = conn.execute("SELECT user_id, first_name, last_name FROM users").fetchall()
+        return [
+            f"{row['user_id']} | {row['first_name']} | {row['last_name']}"
+            for row in rows
+        ]
+    finally:
+        conn.close()

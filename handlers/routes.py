@@ -2,6 +2,7 @@
 
 from app import bot, state
 from helpers.keyboards import main_menu_keyboard, route_detail_keyboard, routes_keyboard
+from storage import photos as storage_photos
 from storage import progress as storage_progress
 from storage import routes as storage_routes
 import config
@@ -182,6 +183,12 @@ def receive_photo(message):
 
     user_id = message.from_user.id
     task_name = config.ROUTE_TASKS[task_index]
+
+    # Скачиваем и сохраняем фотографию подтверждения
+    file_id = message.photo[-1].file_id  # берём самую большую версию фото
+    file_info = bot.get_file(file_id)
+    file_bytes = bot.download_file(file_info.file_path)
+    storage_photos.save_photo(user_id, route_index, task_index, file_bytes)
 
     # Отмечаем пункт выполненным
     state.progress.setdefault(user_id, {}).setdefault(route_index, set()).add(task_index)
