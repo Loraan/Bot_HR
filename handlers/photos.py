@@ -11,7 +11,7 @@ Flow:
 from telebot import types
 
 from app import bot
-from helpers.auth import is_admin
+from helpers.auth import is_admin, require_registration
 from storage import photos as storage_photos
 from storage import progress as storage_progress
 from storage import routes as storage_routes
@@ -20,6 +20,7 @@ import config
 
 
 @bot.message_handler(func=lambda m: m.text == config.BTN_VIEW_PHOTOS)
+@require_registration
 def view_photos(message):
     """Начало просмотра фото: выбор пользователя."""
     if not is_admin(message.from_user.id):
@@ -74,17 +75,18 @@ def photo_choose_route(call):
 
     if not added:
         bot.edit_message_text(
-            "🗺️ У пользователя нет выполненных маршрутов.",
+            "У пользователя нет выполненных маршрутов.",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
         )
         return
 
     bot.edit_message_text(
-        "🗺️ Выберите маршрут:",
+        "<b>Выберите маршрут:</b>",
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
         reply_markup=keyboard,
+        parse_mode="HTML"
     )
 
 

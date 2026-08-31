@@ -3,7 +3,7 @@
 import config
 from app import bot, state
 from helpers import keyboards, scoring
-from helpers.auth import is_admin
+from helpers.auth import is_admin, require_registration
 from storage import feedback as storage_feedback
 from storage import routes as storage_routes
 from storage import users as storage_users
@@ -14,12 +14,13 @@ def show_main_menu(message):
     user_id = message.from_user.id
     bot.send_message(
         message.chat.id,
-        "Выберите действие:",
+        "Пора посмотреть на город по новому, выбирай действие ниже:",
         reply_markup=keyboards.main_menu_keyboard(user_id),
     )
 
 
 @bot.message_handler(func=lambda m: m.text == "Рейтинговая Таблица")
+@require_registration
 def rating_table(message):
     """Показывает рейтинговую таблицу участников по количеству баллов."""
     users = storage_users.load_users()
@@ -61,6 +62,7 @@ def rating_table(message):
 
 
 @bot.message_handler(func=lambda m: m.text == "Маршруты")
+@require_registration
 def routes(message):
     """Показывает список доступных маршрутов."""
     routes_list = storage_routes.load_routes()
@@ -72,15 +74,17 @@ def routes(message):
     user_id = message.from_user.id
     completed = state.progress.get(user_id, {}).get("completed_routes", set())
 
-    text = "🗺️ Доступные маршруты:\n\nВыберите маршрут:"
+    text = "<b>Доступные маршруты:</b>\n\nВыберите маршрут:"
     bot.send_message(
         message.chat.id,
         text,
         reply_markup=keyboards.routes_keyboard(routes_list, completed),
+        parse_mode="HTML"
     )
 
 
 @bot.message_handler(func=lambda m: m.text == "Обратная связь")
+@require_registration
 def feedback(message):
     """Приём обратной связи от пользователя (не для админов)."""
     user_id = message.from_user.id
@@ -105,6 +109,7 @@ def feedback(message):
 
 
 @bot.message_handler(func=lambda m: m.text == "Админка")
+@require_registration
 def admin_menu(message):
     """Показывает меню админа."""
     if not is_admin(message.from_user.id):

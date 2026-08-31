@@ -1,11 +1,85 @@
 """Callback-хендлеры маршрутов и выполнения заданий."""
 
+import os
+from html import escape
+
 from app import bot, state
+from helpers.auth import require_registration
 from helpers.keyboards import main_menu_keyboard, route_detail_keyboard, routes_keyboard
+from storage import description_photos as storage_description_photos
 from storage import photos as storage_photos
 from storage import progress as storage_progress
 from storage import routes as storage_routes
 import config
+
+
+def _route_text(name: str, description: str, is_completed: bool) -> str:
+    """Формирует текст описания маршрута."""
+    text = f"<b>Маршрут: {escape(name)}</b>\n\n{description}"
+    if is_completed:
+        text += "\n\n✅ Выполнен"
+    return text
+
+
+def _show_route_detail(chat_id: int, message_id, route_index: int, user_id: int):
+    """Показывает описание маршрута.
+
+    Если у маршрута есть фотография — текст и фото показываются
+    одним сообщением (фото с подписью). Иначе — обычное текстовое сообщение.
+    """
+    routes_list = storage_routes.load_routes()
+    if route_index >= len(routes_list):
+        return
+
+    name, description = routes_list[route_index]
+    is_completed = _is_route_completed(user_id, route_index)
+
+    route_id = storage_routes.get_route_id(route_index)
+    photo_paths = (
+        storage_description_photos.load_photos_by_route(route_id)
+        if route_id is not None else []
+    )
+    keyboard = route_detail_keyboard(route_index)
+    text = _route_text(name, description, is_completed)
+
+    # Фото описания, существующие на диске
+    existing_photos = [p for p in photo_paths if os.path.exists(p)]
+
+    if existing_photos:
+        # Показываем все фото маршрута одной медиа-группой: подпись-описание
+        # на первом фото, остальные фото рядом в том же сообщении-альбоме.
+        # Фото-сообщение нельзя отредактировать на месте, поэтому удаляем
+        # предыдущее текстовое меню.
+        if message_id is not None:
+            try:
+                bot.delete_message(chat_id, message_id)
+            except Exception:
+                pass
+
+        from telebot import types
+
+        media = []
+        for i, path in enumerate(existing_photos):
+            if i == 0:
+                media.append(types.InputMediaPhoto(open(path, "rb"), caption=text, parse_mode="HTML"))
+            else:
+                media.append(types.InputMediaPhoto(open(path, "rb")))
+
+        bot.send_media_group(chat_id, media)
+
+        # Кнопки нельзя прикрепить к медиа-группе, поэтому шлём их отдельно.
+        bot.send_message(chat_id, "Выберите действие:", reply_markup=keyboard)
+    else:
+        if message_id is not None:
+            bot.edit_message_text(
+                text,
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+        else:
+            bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
 
 
 def _is_route_completed(user_id: int, route_index: int) -> bool:
@@ -15,9 +89,14 @@ def _is_route_completed(user_id: int, route_index: int) -> bool:
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("route:"))
+@require_registration
 def show_route_detail(call):
     """Показывает описание выбранного маршрута с кнопками Назад и Выполнить."""
     index = int(call.data.split(":")[1])
+
+    # Если пользователь открыл маршрут, находясь в ожидании фото — сбрасываем ожидание
+    state.photo_upload.pop(call.message.chat.id, None)
+
     routes_list = storage_routes.load_routes()
 
     if index >= len(routes_list):
@@ -26,25 +105,21 @@ def show_route_detail(call):
 
     bot.answer_callback_query(call.id)
 
-    name, description = routes_list[index]
-    user_id = call.from_user.id
-    is_completed = _is_route_completed(user_id, index)
-
-    text = f"🗺️ Маршрут: {name}\n\n{description}"
-    if is_completed:
-        text += "\n\n✅ Выполнен"
-
-    bot.edit_message_text(
-        text,
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        reply_markup=route_detail_keyboard(index),
+    _show_route_detail(
+        call.message.chat.id,
+        call.message.message_id,
+        index,
+        call.from_user.id,
     )
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "routes_back")
+@require_registration
 def routes_back(call):
     """Возвращает пользователя к выбору маршрута."""
+    # Сбрасываем ожидание загрузки фото при выходе из маршрута
+    state.photo_upload.pop(call.message.chat.id, None)
+
     routes_list = storage_routes.load_routes()
 
     if not routes_list:
@@ -58,15 +133,28 @@ def routes_back(call):
     user_id = call.from_user.id
     completed = state.progress.get(user_id, {}).get("completed_routes", set())
 
-    bot.edit_message_text(
-        "🗺️ Доступные маршруты:\n\nВыберите маршрут:",
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        reply_markup=routes_keyboard(routes_list, completed),
-    )
+    text = "<b>Доступные маршруты:</b>\n\nВыберите маршрут:"
+    keyboard = routes_keyboard(routes_list, completed)
+
+    # Если текущее сообщение — фото, его нельзя отредактировать как текст.
+    if getattr(call.message, "content_type", None) == "photo":
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception:
+            pass
+        bot.send_message(call.message.chat.id, text, reply_markup=keyboard, parse_mode="HTML")
+    else:
+        bot.edit_message_text(
+            text,
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("do_route"))
+@require_registration
 def do_route(call):
     """Показывает меню с пунктами маршрута."""
     route_index = int(call.data.split(":")[1])
@@ -77,7 +165,17 @@ def do_route(call):
     state.progress[user_id]["current_route"] = route_index
 
     bot.answer_callback_query(call.id)
-    show_tasks_menu(call.message.chat.id, call.message.message_id, user_id, route_index)
+
+    # Если маршрут был показан фото-сообщением — его нельзя отредактировать
+    # (edit_message_text не работает без текста). Удаляем и шлём новое сообщение.
+    if getattr(call.message, "content_type", None) == "photo":
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception:
+            pass
+        show_tasks_menu(call.message.chat.id, None, user_id, route_index)
+    else:
+        show_tasks_menu(call.message.chat.id, call.message.message_id, user_id, route_index)
 
 
 def show_tasks_menu(chat_id, message_id, user_id: int, route_index: int):
@@ -115,25 +213,23 @@ def _tasks_keyboard(route_index: int, done: set):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("route_back:"))
+@require_registration
 def route_back(call):
     """Возвращает из меню пунктов к описанию маршрута."""
     route_index = int(call.data.split(":")[1])
+
+    # Пользователь ушёл с экрана загрузки фото — сбрасываем ожидание,
+    # чтобы фотографии, отправленные позже, не засчитались как выполнение.
+    state.photo_upload.pop(call.message.chat.id, None)
+
     routes_list = storage_routes.load_routes()
 
     if route_index < len(routes_list):
-        name, description = routes_list[route_index]
-        user_id = call.from_user.id
-        is_completed = _is_route_completed(user_id, route_index)
-
-        text = f"🗺️ Маршрут: {name}\n\n{description}"
-        if is_completed:
-            text += "\n\n✅ Выполнен"
-
-        bot.edit_message_text(
-            text,
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            reply_markup=route_detail_keyboard(route_index),
+        _show_route_detail(
+            call.message.chat.id,
+            call.message.message_id,
+            route_index,
+            call.from_user.id,
         )
     else:
         # На случай если маршрут изменился - возвращаем к списку
@@ -141,14 +237,16 @@ def route_back(call):
         user_id = call.from_user.id
         completed = state.progress.get(user_id, {}).get("completed_routes", set())
         bot.edit_message_text(
-            "🗺️ Доступные маршруты:\n\nВыберите маршрут:",
+            "<b>Доступные маршруты:</b>\n\nВыберите маршрут:",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             reply_markup=routes_keyboard(routes_list, completed),
+            parse_mode="HTML"
         )
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("task:"))
+@require_registration
 def choose_task(call):
     """Начало выполнения выбранного пункта - просит загрузить 1 фотографию."""
     _, route_index, task_index = call.data.split(":")
@@ -176,6 +274,7 @@ def _remove_keyboard():
 
 
 @bot.message_handler(content_types=["photo"], func=lambda m: m.chat.id in state.photo_upload)
+@require_registration
 def receive_photo(message):
     """Принимает фотографию и отмечает пункт выполненным."""
     route_index, task_index = state.photo_upload[message.chat.id]

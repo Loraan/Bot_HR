@@ -78,6 +78,12 @@ def init_db() -> None:
                         task_index  INTEGER NOT NULL,
                         file_path   TEXT NOT NULL
                     );
+
+                    CREATE TABLE IF NOT EXISTS description_photos (
+                        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                        route_id    INTEGER NOT NULL,
+                        file_path   TEXT NOT NULL
+                    );
                     """
                 )
         finally:
