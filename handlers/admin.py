@@ -40,6 +40,15 @@ def cancel_route(message):
     _abort_route(message.chat.id)
 
 
+@bot.message_handler(commands=["done"])
+@require_registration
+def done_route(message):
+    """Завершает добавление фотографий к описанию маршрута."""
+    if message.chat.id not in state.route_data:
+        return
+    _finish_route(message.chat.id)
+
+
 def _is_cancel(message) -> bool:
     """Проверяет, является ли сообщение командой отмены или кнопкой 'Отмена'."""
     return message.text in (config.BTN_CANCEL, "/cancel")
@@ -48,7 +57,7 @@ def _is_cancel(message) -> bool:
 def _abort_route(chat_id):
     """Прерывает создание маршрута и очищает временные данные.
 
-    Если маршрут уже был сохранён в БД, он удаляется вместе с фотографией.
+    Если маршрут уже был сохранён в БД, он удаляется вместе с фотографиями.
     """
     data = state.route_data.pop(chat_id, None) or {}
 
@@ -61,6 +70,25 @@ def _abort_route(chat_id):
         chat_id,
         "🚫 Создание маршрута отменено.",
         reply_markup=admin_menu_keyboard(),
+    )
+
+
+def _save_desc_photo(route_id: int, message) -> int:
+    """Сохраняет фотографию из сообщения и возвращает количество фото маршрута."""
+    file_id = message.photo[-1].file_id
+    file_info = bot.get_file(file_id)
+    file_bytes = bot.download_file(file_info.file_path)
+    storage_description_photos.save_photo(route_id, file_bytes)
+    return len(storage_description_photos.load_photos_by_route(route_id))
+
+
+def _ask_more_photos(chat_id):
+    """Просит добавить ещё фото либо завершить через /done."""
+    bot.send_message(
+        chat_id,
+        "📷 Если нужно, прикрепите ещё фотографии к описанию (по одной)\n"
+        "или нажмите /done для завершения:",
+        reply_markup=types.ReplyKeyboardMarkup(resize_keyboard=True).row(config.BTN_CANCEL),
     )
 
 
@@ -83,16 +111,16 @@ def get_route_name(message):
     bot.send_message(
         message.chat.id,
         "Отправьте описание маршрута.\n"
-        "Можно просто текстом, а можно прикрепить фотографию — "
+        "Можно просто текстом, а можно прикрепить фотографию (или несколько) — "
         "тогда текст подписи к фото станет описанием маршрута и "
-        "будет показываться вместе с фотографией:",
+        "будет показываться вместе с фотографиями:",
         reply_markup=types.ReplyKeyboardMarkup(resize_keyboard=True).row(config.BTN_CANCEL),
     )
     bot.register_next_step_handler(message, get_route_description)
 
 
 def get_route_description(message):
-    """Получает описание (и, при наличии, фото) и сохраняет маршрут."""
+    """Получает описание (и, при наличии, первое фото) и сохраняет маршрут."""
     if _is_cancel(message):
         _abort_route(message.chat.id)
         return
@@ -101,7 +129,6 @@ def get_route_description(message):
 
     # Описание может быть в подписи к фото (html_caption) или в текстовом сообщении (html_text)
     if message.photo:
-        # Описание маршрута = подпись к фотографии
         route_desc = (message.html_caption or message.caption or "").strip()
         if not route_desc:
             bot.send_message(
@@ -125,18 +152,43 @@ def get_route_description(message):
 
     # Сохраняем маршрут
     route_id = storage_routes.save_route(route_name, route_desc)
+    state.route_data[message.chat.id]["route_id"] = route_id
 
-    # Если к описанию прикреплена фотография — сохраняем её
+    # Если к описанию прикреплено фото — сохраняем его
     if message.photo:
-        file_id = message.photo[-1].file_id
-        file_info = bot.get_file(file_id)
-        file_bytes = bot.download_file(file_info.file_path)
-        storage_description_photos.save_photo(route_id, file_bytes)
+        _save_desc_photo(route_id, message)
 
-    state.route_data.pop(message.chat.id, None)
+    # Переходим в режим сбора дополнительных фотографий (по одной).
+    # Этот режим обрабатывает и альбомы: каждое фото альбома приходит
+    # отдельным сообщением и попадает в collect_desc_photo.
+    state.route_data[message.chat.id]["collecting"] = route_id
+    _ask_more_photos(message.chat.id)
+
+
+@bot.message_handler(
+    content_types=["photo"],
+    func=lambda m: state.route_data.get(m.chat.id, {}).get("collecting") is not None,
+)
+@require_registration
+def collect_desc_photo(message):
+    """Принимает дополнительные фотографии описания маршрута (в т.ч. альбомы)."""
+    route_id = state.route_data[message.chat.id]["collecting"]
+    count = _save_desc_photo(route_id, message)
 
     bot.send_message(
         message.chat.id,
+        f"✅ Фото добавлено ({count}).\n"
+        "Отправьте ещё фото или нажмите /done для завершения.",
+    )
+
+
+def _finish_route(chat_id):
+    """Завершает создание маршрута."""
+    route_name = state.route_data[chat_id]["name"]
+    state.route_data.pop(chat_id, None)
+
+    bot.send_message(
+        chat_id,
         f"✅ Маршрут \"{route_name}\" добавлен!",
         reply_markup=admin_menu_keyboard(),
     )
