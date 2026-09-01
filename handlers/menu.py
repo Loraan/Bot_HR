@@ -52,7 +52,7 @@ def rating_table(message):
         # Медаль для первых трёх мест
         medal = medals[i] if i < 3 else f"{i + 1}."
 
-        line = f"{medal} {full_name} — {score} бал."
+        line = f"{medal} {full_name} — {score} б."
         # Выделяем текущего пользователя жирным (Markdown)
         if user_id == current_user_id:
             line = f"**{line}**"
